@@ -137,7 +137,6 @@ func (h *Handler) Handle(_ context.Context, rec slog.Record) error {
 	if h.opts.AddSource && rec.PC > 0 {
 		h.enc.writeSource(buf, rec.PC, cwd)
 	}
-	// TODO: Add indentation here.
 	h.enc.writeMessage(buf, rec.Level, h.indentMsg(rec.Message))
 	buf.copy(&h.context)
 	rec.Attrs(func(a slog.Attr) bool {
