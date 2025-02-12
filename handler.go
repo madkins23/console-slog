@@ -41,8 +41,16 @@ type HandlerOptions struct {
 }
 
 type Indenter interface {
+	// SetIndentation configures the prefix and indent strings.
+	// The prefix, if any, is added first,
+	// then the indent string is added as many times as the current depth.
 	SetIndentation(prefix, indent string)
+
+	// Increment the indentation depth.
 	Increment()
+
+	// Decrement the indentation depth.
+	// If the current depth is already zero there is no change.
 	Decrement()
 }
 

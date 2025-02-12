@@ -73,3 +73,73 @@ BenchmarkLoggers/console-4                483354              2338 ns/op        
 BenchmarkLoggers/std-text-4               368828              3141 ns/op             132 B/op          3 allocs/op
 BenchmarkLoggers/std-json-4               393322              2909 ns/op             248 B/op          4 allocs/op
 ```
+
+## Indentation
+`console.Handler` also implements the custom interface:
+```go
+type Indenter interface {
+    // SetIndentation configures the prefix and indent strings.
+    // The prefix, if any, is added first,
+    // then the indent string is added as many times as the current depth.
+    SetIndentation(prefix, indent string)
+    
+    // Increment the indentation depth.
+    Increment()
+    
+    // Decrement the indentation depth.
+    // If the current depth is already zero there is no change.
+    Decrement()
+}
+```
+Indentation of functions can occasionally be useful for delineating
+calls by indenting callees more than callers.
+
+This isn't something that `log.slog` provides.
+It is necessary to provide the handler pointer as a global variable or function
+in order to use the `Indenter` interface.
+
+Because the current `depth` is stored within the `console.Handler` this functionality is not thread-safe.
+In order to use it in a multi-thread environment there must be a handler (and logger) for each thread,
+and these items must be passed down through all intervening function calls (in lieu of thread variables).
+
+### Example
+
+```go
+package main
+
+import (
+	"log/slog"
+	"os"
+
+	"github.com/phsym/console-slog"
+)
+
+var hdlr *console.Handler
+
+func main() {
+	hdlr = console.NewHandler(os.Stderr, &console.HandlerOptions{Level: slog.LevelDebug})
+	hdlr.SetIndentation("", "  ")
+	slog.SetDefault(slog.New(hdlr))
+	slog.Info("factorial", "result", factorial(7))
+}
+
+func factorial(number uint) uint {
+	hdlr.Increment()
+	defer hdlr.Decrement()
+
+	slog.Debug("factorial", "number", number)
+	var result uint
+	if number < 2 {
+		result = 1
+	} else {
+		result = number * factorial(number-1)
+	}
+	slog.Debug("factorial", "result", result)
+	return result
+}
+```
+
+![factorial-indent](./doc/img/factorial-indent.png)
+
+The specific case of runaway recursion shows up clearly as the messages
+march repeatedly across the screen.
