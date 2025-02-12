@@ -40,12 +40,52 @@ type HandlerOptions struct {
 	Theme Theme
 }
 
+type Indenter interface {
+	SetIndentation(prefix, indent string)
+	Increment()
+	Decrement()
+}
+
+// indentation defines support data for enhanced message and arg indentation by depth.
+type indentation struct {
+	// Prefix for indentation string.
+	prefix string
+
+	// Indent string for each depth level.
+	indent string
+
+	// Depth is the current indentation depth
+	depth uint
+}
+
+func (hd *indentation) indentMsg(msg string) string {
+	if hd.prefix == "" && (hd.indent == "" || hd.depth < 1) {
+		// No indentation.
+		return msg
+	}
+
+	// Build indentation string.
+	builder := strings.Builder{}
+	if hd.prefix != "" {
+		builder.WriteString(hd.prefix)
+	}
+	if hd.indent != "" && hd.depth > 0 {
+		var i uint
+		for i = 0; i < hd.depth; i++ {
+			builder.WriteString(hd.indent)
+		}
+	}
+	builder.WriteString(msg)
+	return builder.String()
+}
+
 type Handler struct {
 	opts    HandlerOptions
 	out     io.Writer
 	group   string
 	context buffer
 	enc     *encoder
+	indentation
 }
 
 var _ slog.Handler = (*Handler)(nil)
@@ -89,7 +129,8 @@ func (h *Handler) Handle(_ context.Context, rec slog.Record) error {
 	if h.opts.AddSource && rec.PC > 0 {
 		h.enc.writeSource(buf, rec.PC, cwd)
 	}
-	h.enc.writeMessage(buf, rec.Level, rec.Message)
+	// TODO: Add indentation here.
+	h.enc.writeMessage(buf, rec.Level, h.indentMsg(rec.Message))
 	buf.copy(&h.context)
 	rec.Attrs(func(a slog.Attr) bool {
 		h.enc.writeAttr(buf, a, h.group)
@@ -133,5 +174,23 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 		group:   name,
 		context: h.context,
 		enc:     h.enc,
+	}
+}
+
+var _ Indenter = (*Handler)(nil)
+
+func (h *Handler) SetIndentation(prefix, indent string) {
+	h.prefix = prefix
+	h.indent = indent
+	h.depth = 0
+}
+
+func (h *Handler) Increment() {
+	h.depth++
+}
+
+func (h *Handler) Decrement() {
+	if h.depth > 0 {
+		h.depth--
 	}
 }
