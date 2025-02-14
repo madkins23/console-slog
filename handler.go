@@ -38,53 +38,65 @@ type HandlerOptions struct {
 
 	// Theme defines the colorized output using ANSI escape sequences
 	Theme Theme
+
+	// Indent defines a way for the message and attributes to be indented.
+	Indent Indentation
 }
 
-type Indenter interface {
-	// SetIndentation configures the prefix and indent strings.
-	// The prefix, if any, is added first,
-	// then the indent string is added as many times as the current depth.
-	SetIndentation(prefix, indent string)
+const defaultIndentKey = "depth"
 
-	// Increment the indentation depth.
-	Increment()
+// Indentation configures indentation for message and attribute data.
+// If both Prefix and Tab strings are empty ("") indentation will not occur.
+// When indenting, the message is prepended by the Prefix string (if not empty)
+// followed by the depth level iterations of the Tab string.
+// The depth level is provided by an attribute named by the Key string.
+// This should be either an integer or a pointer to a DepthLevel object.
+type Indentation struct {
+	// Prefix string used before indentation (optional).
+	Prefix string
 
-	// Decrement the indentation depth.
-	// If the current depth is already zero there is no change.
-	Decrement()
+	// Tab represents the additional indentation per depth level.
+	// It is probably better to not use an actual tab character here,
+	// but instead use some number of spaces.
+	Tab string
+
+	// Key is the attribute key that will hold the depth number.
+	// When not provided the key is set to "depth".
+	Key string
 }
 
-// indentation defines support data for enhanced message and arg indentation by depth.
-type indentation struct {
-	// Prefix for indentation string.
-	prefix string
-
-	// Indent string for each depth level.
-	indent string
-
-	// Depth is the current indentation depth
-	depth uint
-}
-
-func (hd *indentation) indentMsg(msg string) string {
-	if hd.prefix == "" && (hd.indent == "" || hd.depth < 1) {
-		// No indentation.
-		return msg
+func (indent *Indentation) indentString(depth int64) string {
+	if indent.isZero() || depth <= 0 {
+		return ""
 	}
-
 	// Build indentation string.
 	builder := strings.Builder{}
-	if hd.prefix != "" {
-		builder.WriteString(hd.prefix)
+	if indent.Prefix != "" {
+		builder.WriteString(indent.Prefix)
 	}
-	if hd.indent != "" && hd.depth > 0 {
-		var i uint
-		for i = 0; i < hd.depth; i++ {
-			builder.WriteString(hd.indent)
+	if indent.Tab != "" {
+		// TODO: Is there a more efficient way to do this?
+		var i int64
+		for i = 0; i < depth; i++ {
+			builder.WriteString(indent.Tab)
 		}
 	}
-	builder.WriteString(msg)
 	return builder.String()
+}
+
+// DefaultIndentation returns an Indentation struct with the specified tag string,
+// no Prefix string, and Key set to the default indentation key.
+// Other configurations (e.g. featuring a Prefix or non-default Key)
+// must be set manually.
+func DefaultIndentation(tab string) Indentation {
+	return Indentation{
+		Tab: "  ",
+		Key: defaultIndentKey,
+	}
+}
+
+func (indent *Indentation) isZero() bool {
+	return indent.Prefix == "" && indent.Tab == ""
 }
 
 type Handler struct {
@@ -93,7 +105,6 @@ type Handler struct {
 	group   string
 	context buffer
 	enc     *encoder
-	indentation
 }
 
 var _ slog.Handler = (*Handler)(nil)
@@ -114,6 +125,9 @@ func NewHandler(out io.Writer, opts *HandlerOptions) *Handler {
 	if opts.Theme == nil {
 		opts.Theme = NewDefaultTheme()
 	}
+	if opts.Indent.Key == "" {
+		opts.Indent.Key = defaultIndentKey
+	}
 	return &Handler{
 		opts:    *opts, // Copy struct
 		out:     out,
@@ -123,7 +137,7 @@ func NewHandler(out io.Writer, opts *HandlerOptions) *Handler {
 	}
 }
 
-// Enabled implements slog.Handler.
+// / Enabled implements slog.Handler.
 func (h *Handler) Enabled(_ context.Context, l slog.Level) bool {
 	return l >= h.opts.Level.Level()
 }
@@ -137,12 +151,40 @@ func (h *Handler) Handle(_ context.Context, rec slog.Record) error {
 	if h.opts.AddSource && rec.PC > 0 {
 		h.enc.writeSource(buf, rec.PC, cwd)
 	}
-	h.enc.writeMessage(buf, rec.Level, h.indentMsg(rec.Message))
-	buf.copy(&h.context)
-	rec.Attrs(func(a slog.Attr) bool {
-		h.enc.writeAttr(buf, a, h.group)
-		return true
-	})
+	if h.opts.Indent.isZero() {
+		h.enc.writeMessage(buf, rec.Level, rec.Message)
+		buf.copy(&h.context)
+		rec.Attrs(func(a slog.Attr) bool {
+			h.enc.writeAttr(buf, a, h.group)
+			return true
+		})
+	} else {
+		// NewHandler() should always set h.opts.IndentKey to a non-empty value.
+		key := h.opts.Indent.Key
+		// Indent the message and attributes.
+		// Can't just ask for the depth key, must iterate through attributes.
+		var attributes []slog.Attr
+		var depth int64
+		rec.Attrs(func(a slog.Attr) bool {
+			if a.Key == key {
+				value := a.Value
+				if value.Kind() == slog.KindLogValuer {
+					value = a.Value.LogValuer().LogValue()
+				}
+				if value.Kind() == slog.KindInt64 {
+					depth = value.Int64()
+				}
+			} else {
+				attributes = append(attributes, a)
+			}
+			return true
+		})
+		h.enc.writeMessage(buf, rec.Level, h.opts.Indent.indentString(depth)+rec.Message)
+		buf.copy(&h.context)
+		for _, a := range attributes {
+			h.enc.writeAttr(buf, a, h.group)
+		}
+	}
 	h.enc.NewLine(buf)
 	if _, err := buf.WriteTo(h.out); err != nil {
 		buf.Reset()
@@ -184,20 +226,28 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 	}
 }
 
-var _ Indenter = (*Handler)(nil)
-
-func (h *Handler) SetIndentation(prefix, indent string) {
-	h.prefix = prefix
-	h.indent = indent
-	h.depth = 0
+// DepthValuer represents an indentation depth object (an int64).
+// These objects can be incremented on entry to a function and decremented in a defer statement.
+// Use a pointer to a DepthValuer object in logging statements, do not pass the object itself.
+// This object is not thread safe. Using it as a global variable (the mostly likely usage)
+// in a multithreaded application will result in unpredictable values in different threads.
+type DepthValuer struct {
+	depth int
 }
 
-func (h *Handler) Increment() {
-	h.depth++
+// LogValue implements the slog.LogValuer interface.
+func (dv *DepthValuer) LogValue() slog.Value {
+	return slog.IntValue(int(dv.depth))
 }
 
-func (h *Handler) Decrement() {
-	if h.depth > 0 {
-		h.depth--
-	}
+// Increment the depth value.
+// Use this at the head of a function or important code block.
+func (dv *DepthValuer) Increment() {
+	dv.depth += 1
+}
+
+// Decrement the depth value.
+// Use this after an important code block or as a defer statement in a function.
+func (dv *DepthValuer) Decrement() {
+	dv.depth -= 1
 }

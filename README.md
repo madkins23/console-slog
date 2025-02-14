@@ -75,32 +75,44 @@ BenchmarkLoggers/std-json-4               393322              2909 ns/op        
 ```
 
 ## Indentation
-`console.Handler` also implements the custom interface:
-```go
-type Indenter interface {
-    // SetIndentation configures the prefix and indent strings.
-    // The prefix, if any, is added first,
-    // then the indent string is added as many times as the current depth.
-    SetIndentation(prefix, indent string)
-    
-    // Increment the indentation depth.
-    Increment()
-    
-    // Decrement the indentation depth.
-    // If the current depth is already zero there is no change.
-    Decrement()
-}
-```
 Indentation of functions can occasionally be useful for delineating
 calls by indenting callees more than callers.
+This can sometimes help interpret logs during development.
 
-This isn't something that `log.slog` provides.
-It is necessary to provide the handler pointer as a global variable or function
-in order to use the `Indenter` interface.
+The specific case of runaway recursion shows up clearly as the messages
+march repeatedly across the screen.
 
-Because the current `depth` is stored within the `console.Handler` this functionality is not thread-safe.
-In order to use it in a multi-thread environment there must be a handler (and logger) for each thread,
-and these items must be passed down through all intervening function calls (in lieu of thread variables).
+Indentation is configured using `console.HandlerOptins.Indent` which uses the following type:
+```go
+// Indentation configures indentation for message and attribute data.
+// If both Prefix and Tab strings are empty ("") indentation will not occur. 
+// When indenting, the message is prepended by the Prefix string (if not empty)
+// followed by the depth level iterations of the Tab string.
+// The depth level is provided by an attribute named by the Key string.
+// This should be either an integer or a pointer to a DepthLevel object.
+type Indentation struct {
+// Prefix string used before indentation (optional).
+Prefix string
+
+// Tab represents the additional indentation per depth level.
+// It is probably better to not use an actual tab character here,
+// but instead use some number of spaces.
+Tab    string
+
+// Key is the attribute key that will hold the depth number.
+// When not provided the key is set to "depth".
+Key    string
+}}
+```
+A convenience function can be used instead of
+filling out the `console.HandlerOptins.Indent` object manually for simple cases:
+```go
+// DefaultIndentation returns an Indentation struct with the specified tag string,
+// no Prefix string, and Key set to the default indentation key.
+// Other configurations (e.g. featuring a Prefix or non-default Key)
+// must be set manually.
+func DefaultIndentation(tab string) Indentation
+```
 
 ### Example
 
@@ -114,32 +126,101 @@ import (
 	"github.com/phsym/console-slog"
 )
 
-var hdlr *console.Handler
-
 func main() {
-	hdlr = console.NewHandler(os.Stderr, &console.HandlerOptions{Level: slog.LevelDebug})
-	hdlr.SetIndentation("", "  ")
-	slog.SetDefault(slog.New(hdlr))
-	slog.Info("factorial", "result", factorial(7))
+	slog.SetDefault(slog.New(console.NewHandler(os.Stderr, &console.HandlerOptions{
+		Level:  slog.LevelDebug,
+		Indent: console.DefaultIndentation("  "),
+	})))
+	slog.Info("factorial", "result", factorial(7, 0))
 }
 
-func factorial(number uint) uint {
-	hdlr.Increment()
-	defer hdlr.Decrement()
-
-	slog.Debug("factorial", "number", number)
-	var result uint
+func factorial(number, depth int64) int64 {
+	slog.Debug("factorial", "number", number, "depth", depth)
+	var result int64
 	if number < 2 {
 		result = 1
 	} else {
-		result = number * factorial(number-1)
+		result = number * factorial(number-1, depth+1)
 	}
-	slog.Debug("factorial", "result", result)
+	slog.Debug("factorial", "result", result, "depth", depth)
 	return result
 }
 ```
 
 ![factorial-indent](./doc/img/factorial-indent.png)
 
-The specific case of runaway recursion shows up clearly as the messages
-march repeatedly across the screen.
+Where passing the depth number as an argument is contraindicated or just plain irritating
+it is possible to use the following object for the depth value in logging statements:
+```go
+// DepthValuer represents an indentation depth object (an int64).
+// These objects can be incremented on entry to a function and decremented in a defer statement.
+// This object is not thread safe. Using it as a global variable (the mostly likely usage)
+// in a multithreaded application will result in unpredictable values in different threads.
+type DepthValuer struct {
+	depth int
+}
+
+// LogValue implements the slog.LogValuer interface.
+func (dv *DepthValuer) LogValue() slog.Value {
+	return slog.IntValue(int(dv.depth))
+}
+
+// Increment the depth value.
+// Use this at the head of a function or important code block.
+func (dv *DepthValuer) Increment() {
+	dv.depth += 1
+}
+
+// Decrement the depth value.
+// Use this after an important code block or as a defer statement in a function.
+func (dv *DepthValuer) Decrement() {
+	dv.depth -= 1
+}
+```
+
+The use case for `DepthValuer` is to invoke its `Increment()` function at the start of a function,
+followed by a `defer` of its `Decrement()` object.
+All logging calls in the function need to append the `Indentation.Key` and a pointer to the `DepthValuer`.
+
+_It is not possible_ to add this attribute via a `WithAttrs()` call as the value is
+only evaluated once and cached by the `console.Handler` for performance reasons.
+The `Indentation.Key` and `DepthValuer` pointer must be specified in each logging call.
+
+This mechanism should be usable in code blocks but `defer` doesn't work in this case.
+The programmer is responsible for making certain that the `Decrement()` call is made in all situations.
+
+## Example:
+```go
+package main
+
+import (
+	"log/slog"
+	"os"
+
+	"github.com/phsym/console-slog"
+)
+
+var depthValuer = &console.DepthValuer{}
+
+func main() {
+	slog.SetDefault(slog.New(console.NewHandler(os.Stderr, &console.HandlerOptions{
+		Level:  slog.LevelDebug,
+		Indent: console.DefaultIndentation("  "),
+	})))
+	slog.Info("factorial", "result", factorial(7))
+}
+
+func factorial(number int64) int64 {
+	depthValuer.Increment()
+	defer depthValuer.Decrement()
+	slog.Debug("factorial", "number", number, "depth", depthValuer)
+	var result int64
+	if number < 2 {
+		result = 1
+	} else {
+		result = number * factorial(number-1)
+	}
+	slog.Debug("factorial", "result", result, "depth", depthValuer)
+	return result
+}
+```

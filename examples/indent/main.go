@@ -7,26 +7,22 @@ import (
 	"github.com/phsym/console-slog"
 )
 
-var hdlr *console.Handler
-
 func main() {
-	hdlr = console.NewHandler(os.Stderr, &console.HandlerOptions{Level: slog.LevelDebug})
-	hdlr.SetIndentation("", "  ")
-	slog.SetDefault(slog.New(hdlr))
-	slog.Info("factorial", "result", factorial(7))
+	slog.SetDefault(slog.New(console.NewHandler(os.Stderr, &console.HandlerOptions{
+		Level:  slog.LevelDebug,
+		Indent: console.DefaultIndentation("  "),
+	})))
+	slog.Info("factorial", "result", factorial(7, 0))
 }
 
-func factorial(number uint) uint {
-	hdlr.Increment()
-	defer hdlr.Decrement()
-
-	slog.Debug("factorial", "number", number)
-	var result uint
+func factorial(number, depth int64) int64 {
+	slog.Debug("factorial", "number", number, "depth", depth)
+	var result int64
 	if number < 2 {
 		result = 1
 	} else {
-		result = number * factorial(number-1)
+		result = number * factorial(number-1, depth+1)
 	}
-	slog.Debug("factorial", "result", result)
+	slog.Debug("factorial", "result", result, "depth", depth)
 	return result
 }
