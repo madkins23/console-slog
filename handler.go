@@ -69,15 +69,7 @@ func (indent *Indentation) indentString(depth int64) string {
 	if indent.isZero() || depth <= 0 {
 		return ""
 	}
-	// Build indentation string.
-	builder := strings.Builder{}
-	if indent.Prefix != "" {
-		builder.WriteString(indent.Prefix)
-	}
-	if indent.Tab != "" {
-		builder.WriteString(strings.Repeat(indent.Tab, int(depth)))
-	}
-	return builder.String()
+	return indent.Prefix + strings.Repeat(indent.Tab, int(depth))
 }
 
 // DefaultIndentation returns an Indentation struct with the specified tag string,
@@ -155,9 +147,9 @@ func (h *Handler) Handle(_ context.Context, rec slog.Record) error {
 			return true
 		})
 	} else {
+
 		// Indent the message and attributes.
-		// Can't just ask for the depth key, must iterate through attributes.
-		var attributes []slog.Attr
+		// Can't just ask for the depth key, must iterate through attributes to find it.
 		var depth int64
 		rec.Attrs(func(a slog.Attr) bool {
 			if a.Key == h.opts.Indent.Key {
@@ -167,17 +159,19 @@ func (h *Handler) Handle(_ context.Context, rec slog.Record) error {
 				}
 				if value.Kind() == slog.KindInt64 {
 					depth = value.Int64()
+					// If multiple depth key entries only the first one is used.
+					return false
 				}
-			} else {
-				attributes = append(attributes, a)
 			}
 			return true
 		})
 		h.enc.writeMessage(buf, rec.Level, h.opts.Indent.indentString(depth)+rec.Message)
 		buf.copy(&h.context)
-		for _, a := range attributes {
+		// Second iteration over attributes to push them onto the encoder.
+		rec.Attrs(func(a slog.Attr) bool {
 			h.enc.writeAttr(buf, a, h.group)
-		}
+			return true
+		})
 	}
 	h.enc.NewLine(buf)
 	if _, err := buf.WriteTo(h.out); err != nil {
