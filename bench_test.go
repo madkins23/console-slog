@@ -24,6 +24,8 @@ var handlers = []struct {
 	{"console", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
 	{"std-text", slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
 	{"std-json", slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
+	{"console-indent", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, Indent: DefaultIndentation("  ")})},
+	//{"console-ind-valuer", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, Indent: DefaultIndentation("  ")})},
 }
 
 var attrs = []slog.Attr{
@@ -61,12 +63,38 @@ func BenchmarkHandlers(b *testing.B) {
 			}
 		})
 	}
+	b.ReportAllocs()
 }
 
-func BenchmarkLoggers(b *testing.B) {
+func BenchmarkHandlersIndent(b *testing.B) {
+	ctx := context.Background()
+	rec := slog.NewRecord(time.Now(), slog.LevelInfo, "hello", 0)
+	rec.AddAttrs(attrs...)
+	rec.AddAttrs(slog.Attr{
+		Key:   "depth",
+		Value: slog.IntValue(5),
+	})
+
+	for _, tc := range handlers {
+		b.Run(tc.name, func(b *testing.B) {
+			l := tc.hdl.WithAttrs(attrs).WithGroup("test").WithAttrs(attrs)
+			// Warm-up
+			_ = l.Handle(ctx, rec)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = l.Handle(ctx, rec)
+			}
+		})
+	}
+	b.ReportAllocs()
+}
+
+func BenchmarkLoggersIndent(b *testing.B) {
 	for _, tc := range handlers {
 		ctx := context.Background()
 		b.Run(tc.name, func(b *testing.B) {
+			attrsIndent := attrs
+			attrsIndent = append(attrsIndent, slog.Int64("depth", 5))
 			l := slog.New(tc.hdl).With(attrsAny...).WithGroup("test").With(attrsAny...)
 			// Warm-up
 			l.LogAttrs(ctx, slog.LevelInfo, "hello", attrs...)
@@ -76,4 +104,5 @@ func BenchmarkLoggers(b *testing.B) {
 			}
 		})
 	}
+	b.ReportAllocs()
 }

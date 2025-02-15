@@ -75,11 +75,7 @@ func (indent *Indentation) indentString(depth int64) string {
 		builder.WriteString(indent.Prefix)
 	}
 	if indent.Tab != "" {
-		// TODO: Is there a more efficient way to do this?
-		var i int64
-		for i = 0; i < depth; i++ {
-			builder.WriteString(indent.Tab)
-		}
+		builder.WriteString(strings.Repeat(indent.Tab, int(depth)))
 	}
 	return builder.String()
 }
@@ -159,14 +155,12 @@ func (h *Handler) Handle(_ context.Context, rec slog.Record) error {
 			return true
 		})
 	} else {
-		// NewHandler() should always set h.opts.IndentKey to a non-empty value.
-		key := h.opts.Indent.Key
 		// Indent the message and attributes.
 		// Can't just ask for the depth key, must iterate through attributes.
 		var attributes []slog.Attr
 		var depth int64
 		rec.Attrs(func(a slog.Attr) bool {
-			if a.Key == key {
+			if a.Key == h.opts.Indent.Key {
 				value := a.Value
 				if value.Kind() == slog.KindLogValuer {
 					value = a.Value.LogValuer().LogValue()
