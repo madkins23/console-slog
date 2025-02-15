@@ -233,12 +233,30 @@ goos: linux
 goarch: amd64
 pkg: github.com/phsym/console-slog
 cpu: Intel(R) Core(TM) i7-7820HQ CPU @ 2.90GHz
-benchmark                                       iter       time/iter   bytes alloc        allocs
----------                                       ----       ---------   -----------        ------
-BenchmarkHandlers/console-8                   780844   1496.00 ns/op        0 B/op   0 allocs/op
-BenchmarkHandlers/console-indent-8            745261   1578.00 ns/op        0 B/op   0 allocs/op
-BenchmarkHandlersIndent/console-8             700791   1614.00 ns/op        0 B/op   0 allocs/op
-BenchmarkHandlersIndent/console-indent-8      694560   1746.00 ns/op        0 B/op   0 allocs/op
-BenchmarkLoggersIndent/console-8              574340   1983.00 ns/op      128 B/op   1 allocs/op
-BenchmarkLoggersIndent/console-indent-8       520488   2277.00 ns/op      128 B/op   1 allocs/op
+enchmark                                          iter       time/iter   bytes alloc        allocs
+---------                                          ----       ---------   -----------        ------
+BenchmarkHandlers/dummy-8                     167386000      7.28 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlers/console-8                      773392   1490.00 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlers/console-indent-8               724384   1601.00 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlers/std-text-8                     682894   1676.00 ns/op        2 B/op   1 allocs/op
+BenchmarkHandlers/std-json-8                     793027   1501.00 ns/op      120 B/op   3 allocs/op
+BenchmarkHandlersIndent/dummy-8               166353291      7.38 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlersIndent/console-8                644863   1657.00 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlersIndent/console-indent-8         699098   1754.00 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlersIndent/std-text-8               608865   1781.00 ns/op        2 B/op   1 allocs/op
+BenchmarkHandlersIndent/std-json-8               696843   1574.00 ns/op      120 B/op   3 allocs/op
+BenchmarkLoggersIndent/dummy-8                  2955999    406.40 ns/op      128 B/op   1 allocs/op
+BenchmarkLoggersIndent/console-8                 543122   1953.00 ns/op      128 B/op   1 allocs/op
+BenchmarkLoggersIndent/console-indent-8          540606   2033.00 ns/op      128 B/op   1 allocs/op
+BenchmarkLoggersIndent/std-text-8                484188   2158.00 ns/op      130 B/op   2 allocs/op
+BenchmarkLoggersIndent/std-json-8                562014   1996.00 ns/op      248 B/op   4 allocs/op
+BenchmarkHandlersFactorial/dummy-8              8170125    145.30 ns/op       16 B/op   2 allocs/op
+BenchmarkHandlersFactorial/console-8            7995117    144.20 ns/op       16 B/op   2 allocs/op
+BenchmarkHandlersFactorial/console-indent-8     8149261    145.80 ns/op       16 B/op   2 allocs/op
+BenchmarkHandlersFactorial/std-text-8           7979374    144.70 ns/op       16 B/op   2 allocs/op
+BenchmarkHandlersFactorial/std-json-8           8365809    144.20 ns/op       16 B/op   2 allocs/op
+BenchmarkBuffer/std-8                         160528912      7.57 ns/op        0 B/op   0 allocs/op
+BenchmarkBuffer/buffer-8                      297744796      4.11 ns/op        0 B/op   0 allocs/op
+BenchmarkDuration/std-8                        30995145     38.00 ns/op        0 B/op   0 allocs/op
+BenchmarkDuration/append-8                     36095490     32.81 ns/op        0 B/op   0 allocs/op
 ```

@@ -66,7 +66,6 @@ func BenchmarkHandlers(b *testing.B) {
 			}
 		})
 	}
-	b.ReportAllocs()
 }
 
 func BenchmarkHandlersIndent(b *testing.B) {
@@ -89,7 +88,6 @@ func BenchmarkHandlersIndent(b *testing.B) {
 			}
 		})
 	}
-	b.ReportAllocs()
 }
 
 func BenchmarkLoggersIndent(b *testing.B) {
@@ -107,5 +105,29 @@ func BenchmarkLoggersIndent(b *testing.B) {
 			}
 		})
 	}
-	b.ReportAllocs()
+}
+
+func BenchmarkHandlersFactorial(b *testing.B) {
+	for _, tc := range handlers {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				factorial(slog.New(tc.hdl), 7)
+			}
+		})
+	}
+}
+
+var depthValuer = &DepthValuer{}
+
+func factorial(logger *slog.Logger, number int) int {
+	depthValuer.Increment()
+	depthValuer.Decrement()
+	slog.Debug("factorial", "number", number, "depth", depthValuer)
+	if number <= 1 {
+		return 1
+	}
+	result := number * factorial(logger, number-1)
+	slog.Debug("factorial", "result", result, "depth", depthValuer)
+	return result
 }
