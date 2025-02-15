@@ -28,7 +28,6 @@ var handlers = []struct {
 	{"console-indent", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, Indent: DefaultIndentation("  ")})},
 	{"std-text", slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
 	{"std-json", slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
-	//{"console-ind-valuer", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, Indent: DefaultIndentation("  ")})},
 }
 
 var attrs = []slog.Attr{
@@ -107,6 +106,7 @@ func BenchmarkLoggersIndent(b *testing.B) {
 	}
 }
 
+// BenchmarkHandlersFactorial tests the performance of the DepthValuer.
 func BenchmarkHandlersFactorial(b *testing.B) {
 	for _, tc := range handlers {
 		b.Run(tc.name, func(b *testing.B) {
