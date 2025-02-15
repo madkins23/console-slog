@@ -189,7 +189,7 @@ The `Indentation.Key` and `DepthValuer` pointer must be specified in each loggin
 This mechanism should be usable in code blocks but `defer` doesn't work in this case.
 The programmer is responsible for making certain that the `Decrement()` call is made in all situations.
 
-## Example:
+### Example:
 ```go
 package main
 
@@ -223,4 +223,22 @@ func factorial(number int64) int64 {
 	slog.Debug("factorial", "result", result, "depth", depthValuer)
 	return result
 }
+```
+### Performances
+See [benchmark file](./bench_test.go) for details.
+
+Benchmark results comparing console numbers with and without indentation testing:
+```
+goos: linux
+goarch: amd64
+pkg: github.com/phsym/console-slog
+cpu: Intel(R) Core(TM) i7-7820HQ CPU @ 2.90GHz
+benchmark                                       iter       time/iter   bytes alloc        allocs
+---------                                       ----       ---------   -----------        ------
+BenchmarkHandlers/console-8                   780844   1496.00 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlers/console-indent-8            745261   1578.00 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlersIndent/console-8             700791   1614.00 ns/op        0 B/op   0 allocs/op
+BenchmarkHandlersIndent/console-indent-8      694560   1746.00 ns/op        0 B/op   0 allocs/op
+BenchmarkLoggersIndent/console-8              574340   1983.00 ns/op      128 B/op   1 allocs/op
+BenchmarkLoggersIndent/console-indent-8       520488   2277.00 ns/op      128 B/op   1 allocs/op
 ```

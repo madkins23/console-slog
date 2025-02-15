@@ -1,5 +1,8 @@
 package console
 
+// Run with go test -bench=. -test.benchmem | prettybench
+// Get pretty bench with go install github.com/cespare/prettybench@latest
+
 import (
 	"context"
 	"errors"
