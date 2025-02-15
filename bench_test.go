@@ -22,9 +22,9 @@ var handlers = []struct {
 }{
 	{"dummy", &DummyHandler{}},
 	{"console", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
+	{"console-indent", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, Indent: DefaultIndentation("  ")})},
 	{"std-text", slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
 	{"std-json", slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: false})},
-	{"console-indent", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, Indent: DefaultIndentation("  ")})},
 	//{"console-ind-valuer", NewHandler(io.Discard, &HandlerOptions{Level: slog.LevelDebug, Indent: DefaultIndentation("  ")})},
 }
 
